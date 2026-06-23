@@ -2,15 +2,85 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import plotly.express as px
-from datetime import datetime
 
 # ==========================================
-# 1. DATABASE & BACKEND LOGIC
+# 1. PAGE SETUP & THEME INJECTION (PRO LOOK)
+# ==========================================
+st.set_page_config(
+    page_title="Retail Intelligence Suite", 
+    page_icon="📊", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom Professional CSS (Deep Navy & Slate Palette)
+st.markdown("""
+    <style>
+        /* Main background and font */
+        .main {
+            background-color: #f8f9fa;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            background-color: #0f172a !important;
+            color: #ffffff;
+        }
+        [data-testid="stSidebar"] .stMarkdown h2, [data-testid="stSidebar"] p {
+            color: #f1f5f9 !important;
+        }
+        
+        /* Professional Metric Cards */
+        .metric-container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border-left: 5px solid #2563eb; /* Corporate Blue Accent */
+            margin-bottom: 15px;
+        }
+        .metric-label {
+            font-size: 0.85rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .metric-value {
+            font-size: 1.8rem;
+            color: #0f172a;
+            font-weight: 700;
+            margin-top: 5px;
+        }
+        
+        /* Headers */
+        h1 {
+            color: #0f172a !important;
+            font-weight: 800 !important;
+        }
+        h3 {
+            color: #1e293b !important;
+            font-weight: 600 !important;
+            margin-top: 20px !important;
+        }
+        
+        /* Custom divider */
+        .custom-hr {
+            border: 0;
+            height: 1px;
+            background: #e2e8f0;
+            margin: 25px 0;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 2. DATABASE & BACKEND LOGIC
 # ==========================================
 DB_NAME = "retail_data.db"
 
 def init_db():
-    """Initializes the SQL database with a sales table."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
@@ -29,121 +99,137 @@ def init_db():
     conn.close()
 
 def save_to_db(df):
-    """Cleans and appends uploaded data into the SQL database."""
     conn = sqlite3.connect(DB_NAME)
-    # Business Logic: Ensure correct data types and calculate Total Revenue if missing
     df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
     df['total_revenue'] = df['quantity'] * df['unit_price']
-    
-    # Append data to SQL
     df.to_sql('sales', conn, if_exists='append', index=False)
     conn.close()
 
 def fetch_analytics_data():
-    """Retrieves all data from SQL for analysis."""
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("SELECT * FROM sales", conn)
     conn.close()
     return df
 
-# ==========================================
-# 2. STREAMLIT USER INTERFACE (UI)
-# ==========================================
-st.set_page_config(page_title="Automated Retail Analytics", layout="wide")
 init_db()
-
-st.title("📊 Automated Retail Analytics Dashboard")
-st.subheader("Upload raw sales data to instantly generate business insights and SQL records.")
-
-# Sidebar - Data Upload
-st.sidebar.header("📥 Upload Center")
-uploaded_file = st.sidebar.file_uploader("Upload Retail CSV", type=["csv"])
-
-if uploaded_file is not None:
-    try:
-        raw_df = pd.read_csv(uploaded_file)
-        
-        # Validate expected columns
-        required_cols = {'date', 'product_category', 'product_name', 'quantity', 'unit_price', 'store_location'}
-        if required_cols.issubset(raw_df.columns):
-            save_to_db(raw_df)
-            st.sidebar.success("🎉 Data successfully processed and saved to SQL!")
-        else:
-            st.sidebar.error(f"Missing columns! Required: {required_cols}")
-    except Exception as e:
-        st.sidebar.error(f"Error parsing file: {e}")
-
-# Fetch latest data from SQL
 data = fetch_analytics_data()
 
-if data.empty:
-    st.info("👋 Welcome! Please upload a retail CSV file in the sidebar to populate the dashboard.")
+# ==========================================
+# 3. SIDEBAR NAVIGATION & UPLOAD
+# ==========================================
+with st.sidebar:
+    st.image("https://img.icons8.com/external-flatart-icons-flat-flatarticons/128/external-analytics-marketing-flatart-icons-flat-flatarticons.png", width=70)
+    st.markdown("## **Retail Intelligence**")
+    st.caption("v2.1.0 • Enterprise Edition")
+    st.markdown("<div style='margin: 20px 0;'></div>", unsafe_allow_html=True)
     
-    # Provide a sample data template for the user
-    st.markdown("### 📝 Expected CSV Format Template:")
-    sample_template = pd.DataFrame([{
-        "date": "2026-01-01", "product_category": "Electronics", "product_name": "Laptop",
-        "quantity": 5, "unit_price": 800.00, "store_location": "New York"
-    }])
-    st.dataframe(sample_template)
+    st.markdown("### 📥 Data Ingestion")
+    uploaded_file = st.file_uploader("Upload Daily Sales (CSV)", type=["csv"], help="Upload standard transactional retail CSV files.")
+    
+    if uploaded_file is not None:
+        try:
+            raw_df = pd.read_csv(uploaded_file)
+            required_cols = {'date', 'product_category', 'product_name', 'quantity', 'unit_price', 'store_location'}
+            if required_cols.issubset(raw_df.columns):
+                save_to_db(raw_df)
+                st.success("⚡ Database synchronized successfully.")
+                st.rerun()
+            else:
+                st.error("Schema Mismatch. Please check columns.")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
+# ==========================================
+# 4. MAIN DASHBOARD UI
+# ==========================================
+st.title("📊 Executive Performance Dashboard")
+st.markdown("Real-time transactional insights, revenue trends, and localized store performance.")
+
+if data.empty:
+    st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
+    st.warning("📥 **System awaiting data input.** Please upload a sales CSV file via the sidebar to generate the enterprise suite.")
+    
+    with st.expander("📝 View Required Data Schema Template"):
+        sample_template = pd.DataFrame([{
+            "date": "2026-01-01", "product_category": "Electronics", "product_name": "Laptop",
+            "quantity": 5, "unit_price": 800.00, "store_location": "New York"
+        }])
+        st.dataframe(sample_template)
 else:
-    # ==========================================
-    # 3. FILTERS & INTERACTIVE FEATURES
-    # ==========================================
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        locations = ["All"] + list(data['store_location'].unique())
-        selected_location = st.selectbox("📍 Filter by Store Location", locations)
-    with col2:
-        categories = ["All"] + list(data['product_category'].unique())
-        selected_category = st.selectbox("🏷️ Filter by Product Category", categories)
+    # FILTERS ROW
+    st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
+    
+    f1, f2 = st.columns(2)
+    with f1:
+        locations = ["All Locations"] + list(data['store_location'].unique())
+        selected_location = st.selectbox("📍 Store Location", locations)
+    with f2:
+        categories = ["All Categories"] + list(data['product_category'].unique())
+        selected_category = st.selectbox("🏷️ Product Verticals", categories)
 
-    # Apply Filters to Dataframe
+    # Filter Application
     filtered_data = data.copy()
-    if selected_location != "All":
+    if selected_location != "All Locations":
         filtered_data = filtered_data[filtered_data['store_location'] == selected_location]
-    if selected_category != "All":
+    if selected_category != "All Categories":
         filtered_data = filtered_data[filtered_data['product_category'] == selected_category]
 
-    # ==========================================
-    # 4. AUTOMATED KPIs
-    # ==========================================
+    # PROFESSIONAL KPI CARDS (HTML Injected for precision styling)
     total_sales = filtered_data['total_revenue'].sum()
     total_items = filtered_data['quantity'].sum()
     avg_order_val = filtered_data['total_revenue'].mean() if len(filtered_data) > 0 else 0
     top_performer = filtered_data.groupby('product_name')['total_revenue'].sum().idxmax() if len(filtered_data) > 0 else "N/A"
 
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric("💰 Total Revenue", f"${total_sales:,.2f}")
-    kpi2.metric("📦 Units Sold", f"{total_items:,}")
-    kpi3.metric("📈 Avg Transaction Value", f"${avg_order_val:,.2f}")
-    kpi4.metric("🏆 Top Product", top_performer)
+    with kpi1:
+        st.markdown(f"<div class='metric-container'><div class='metric-label'>Gross Revenue</div><div class='metric-value'>${total_sales:,.2f}</div></div>", unsafe_allow_html=True)
+    with kpi2:
+        st.markdown(f"<div class='metric-container'><div class='metric-label'>Volume Sold</div><div class='metric-value'>{total_items:,} units</div></div>", unsafe_allow_html=True)
+    with kpi3:
+        st.markdown(f"<div class='metric-container'><div class='metric-label'>Average ticket value</div><div class='metric-value'>${avg_order_val:,.2f}</div></div>", unsafe_allow_html=True)
+    with kpi4:
+        st.markdown(f"<div class='metric-container'><div class='metric-label'>MVP Product</div><div class='metric-value' style='font-size:1.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{top_performer}</div></div>", unsafe_allow_html=True)
 
-    # ==========================================
-    # 5. DYNAMIC GRAPHS & TRENDS
-    # ==========================================
-    st.markdown("---")
+    # VISUALIZATIONS WITH PROFESSIONAL GRAPH THEMES
+    st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
     graph_col1, graph_col2 = st.columns(2)
 
+    # Color Palette for Charts
+    corporate_colors = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe']
+
     with graph_col1:
-        st.subheader("📅 Revenue Trend Over Time")
-        # Aggregate revenue by date
+        st.markdown("### 📅 Net Revenue Run Rate")
         trend_df = filtered_data.groupby('date')['total_revenue'].sum().reset_index().sort_values('date')
-        fig_trend = px.line(trend_df, x='date', y='total_revenue', markers=True,
-                            labels={'total_revenue': 'Revenue ($)', 'date': 'Date'},
-                            template="plotly_white")
-        st.plotly_chart(fig_trend, use_container_width=True)
+        fig_trend = px.line(
+            trend_df, x='date', y='total_revenue', markers=True,
+            labels={'total_revenue': 'Revenue ($)', 'date': 'Timeline'},
+            template="plotly_white"
+        )
+        fig_trend.update_traces(line_color='#2563eb', line_width=3, marker=dict(size=8, color='#0f172a'))
+        fig_trend.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=350)
+        st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
 
     with graph_col2:
-        st.subheader("📊 Revenue by Product Category")
+        st.markdown("### 📊 Distribution by Product Vertical")
         cat_df = filtered_data.groupby('product_category')['total_revenue'].sum().reset_index()
-        fig_bar = px.bar(cat_df, x='product_category', y='total_revenue', color='product_category',
-                         labels={'total_revenue': 'Revenue ($)', 'product_category': 'Category'},
-                         template="plotly_white")
-        st.plotly_chart(fig_bar, use_container_width=True)
+        fig_bar = px.bar(
+            cat_df, x='product_category', y='total_revenue',
+            labels={'total_revenue': 'Revenue ($)', 'product_category': 'Category'},
+            template="plotly_white",
+            color_discrete_sequence=corporate_colors
+        )
+        fig_bar.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=350)
+        st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
-    # View Raw SQL Records
-    with st.expander("🔍 View Raw SQL Database Records"):
-        st.dataframe(filtered_data, use_container_width=True)
+    # DATA LEDGER SECTION
+    st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
+    with st.expander("📋 Secure SQL Database Record Ledger"):
+        st.dataframe(
+            filtered_data, 
+            use_container_width=True,
+            column_config={
+                "total_revenue": st.column_config.NumberColumn("Total Revenue", format="$%.2f"),
+                "unit_price": st.column_config.NumberColumn("Unit Price", format="$%.2f"),
+                "quantity": st.column_config.NumberColumn("Units")
+            }
+        )
