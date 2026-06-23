@@ -4,7 +4,7 @@ import sqlite3
 import plotly.express as px
 
 # ==========================================
-# 1. PAGE SETUP & THEME INJECTION (PRO LOOK)
+# 1. PAGE SETUP & THEME INJECTION
 # ==========================================
 st.set_page_config(
     page_title="Retail Intelligence Suite", 
@@ -13,70 +13,28 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Professional CSS (Deep Navy & Slate Palette)
+# Premium Professional CSS
 st.markdown("""
     <style>
-        /* Main background and font */
-        .main {
-            background-color: #f8f9fa;
-            font-family: 'Inter', sans-serif;
-        }
+        .main { background-color: #f8f9fa; font-family: 'Inter', sans-serif; }
+        [data-testid="stSidebar"] { background-color: #0f172a !important; color: #ffffff; }
+        [data-testid="stSidebar"] .stMarkdown h2, [data-testid="stSidebar"] p { color: #f1f5f9 !important; }
         
-        /* Sidebar styling */
-        [data-testid="stSidebar"] {
-            background-color: #0f172a !important;
-            color: #ffffff;
-        }
-        [data-testid="stSidebar"] .stMarkdown h2, [data-testid="stSidebar"] p {
-            color: #f1f5f9 !important;
-        }
-        
-        /* Professional Metric Cards */
         .metric-container {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border-left: 5px solid #2563eb; /* Corporate Blue Accent */
-            margin-bottom: 15px;
+            background-color: #ffffff; padding: 20px; border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            border-left: 5px solid #2563eb; margin-bottom: 15px;
         }
-        .metric-label {
-            font-size: 0.85rem;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 600;
-        }
-        .metric-value {
-            font-size: 1.8rem;
-            color: #0f172a;
-            font-weight: 700;
-            margin-top: 5px;
-        }
-        
-        /* Headers */
-        h1 {
-            color: #0f172a !important;
-            font-weight: 800 !important;
-        }
-        h3 {
-            color: #1e293b !important;
-            font-weight: 600 !important;
-            margin-top: 20px !important;
-        }
-        
-        /* Custom divider */
-        .custom-hr {
-            border: 0;
-            height: 1px;
-            background: #e2e8f0;
-            margin: 25px 0;
-        }
+        .metric-label { font-size: 0.85rem; color: #64748b; text-transform: uppercase; font-weight: 600; }
+        .metric-value { font-size: 1.8rem; color: #0f172a; font-weight: 700; margin-top: 5px; }
+        h1 { color: #0f172a !important; font-weight: 800 !important; }
+        h3 { color: #1e293b !important; font-weight: 600 !important; margin-top: 20px !important; }
+        .custom-hr { border: 0; height: 1px; background: #e2e8f0; margin: 25px 0; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. DATABASE & BACKEND LOGIC
+# 2. DATABASE PIPELINE
 # ==========================================
 DB_NAME = "retail_data.db"
 
@@ -100,10 +58,13 @@ def init_db():
 
 def save_to_db(df):
     conn = sqlite3.connect(DB_NAME)
-    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
-    df['total_revenue'] = df['quantity'] * df['unit_price']
-    df.to_sql('sales', conn, if_exists='append', index=False)
+    # Ensure standard cleaning before committing to SQL
+    df_copy = df.copy()
+    df_copy['date'] = pd.to_datetime(df_copy['date']).dt.strftime('%Y-%m-%d')
+    df_copy['total_revenue'] = df_copy['quantity'] * df_copy['unit_price']
+    df_copy.to_sql('sales', conn, if_exists='append', index=False)
     conn.close()
+    return df_copy
 
 def fetch_analytics_data():
     conn = sqlite3.connect(DB_NAME)
@@ -111,8 +72,8 @@ def fetch_analytics_data():
     conn.close()
     return df
 
+# Initialize DB structure
 init_db()
-data = fetch_analytics_data()
 
 # ==========================================
 # 3. SIDEBAR NAVIGATION & UPLOAD
@@ -120,61 +81,67 @@ data = fetch_analytics_data()
 with st.sidebar:
     st.image("https://img.icons8.com/external-flatart-icons-flat-flatarticons/128/external-analytics-marketing-flatart-icons-flat-flatarticons.png", width=70)
     st.markdown("## **Retail Intelligence**")
-    st.caption("v2.1.0 • Enterprise Edition")
+    st.caption("v2.2.0 • Enterprise Edition")
     st.markdown("<div style='margin: 20px 0;'></div>", unsafe_allow_html=True)
     
     st.markdown("### 📥 Data Ingestion")
-    uploaded_file = st.file_uploader("Upload Daily Sales (CSV)", type=["csv"], help="Upload standard transactional retail CSV files.")
-    
-    if uploaded_file is not None:
-        try:
-            raw_df = pd.read_csv(uploaded_file)
-            required_cols = {'date', 'product_category', 'product_name', 'quantity', 'unit_price', 'store_location'}
-            if required_cols.issubset(raw_df.columns):
-                save_to_db(raw_df)
-                st.success("⚡ Database synchronized successfully.")
-                st.rerun()
-            else:
-                st.error("Schema Mismatch. Please check columns.")
-        except Exception as e:
-            st.error(f"Error: {e}")
+    uploaded_file = st.file_uploader("Upload Daily Sales (CSV)", type=["csv"])
 
 # ==========================================
-# 4. MAIN DASHBOARD UI
+# 4. MAIN INTERFACE CONTROLLER
 # ==========================================
 st.title("📊 Executive Performance Dashboard")
 st.markdown("Real-time transactional insights, revenue trends, and localized store performance.")
 
-if data.empty:
+# Active state tracking
+active_data = pd.DataFrame()
+
+if uploaded_file is not None:
+    try:
+        raw_df = pd.read_csv(uploaded_file)
+        required_cols = {'date', 'product_category', 'product_name', 'quantity', 'unit_price', 'store_location'}
+        
+        if required_cols.issubset(raw_df.columns):
+            # Save to SQL backend and capture the cleanly processed data instantly
+            active_data = save_to_db(raw_df)
+            st.sidebar.success("⚡ Database synchronized successfully.")
+        else:
+            st.sidebar.error("Schema Mismatch. Please check file columns.")
+    except Exception as e:
+        st.sidebar.error(f"Error processing file: {e}")
+else:
+    # If no file uploaded right now, check if database has historical records
+    historical_data = fetch_analytics_data()
+    if not historical_data.empty:
+        active_data = historical_data
+
+# ==========================================
+# 5. DYNAMIC ANALYSIS RENDERER
+# ==========================================
+if active_data.empty:
+    # ABSOLUTELY NO DATA SHOWING WHEN EMPTY
     st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
-    st.warning("📥 **System awaiting data input.** Please upload a sales CSV file via the sidebar to generate the enterprise suite.")
-    
-    with st.expander("📝 View Required Data Schema Template"):
-        sample_template = pd.DataFrame([{
-            "date": "2026-01-01", "product_category": "Electronics", "product_name": "Laptop",
-            "quantity": 5, "unit_price": 800.00, "store_location": "New York"
-        }])
-        st.dataframe(sample_template)
+    st.info("👋 **Welcome to the Suite.** System is awaiting business inputs. Please drop your `mock_retail_data.csv` into the sidebar upload center to initialize analytical rendering pipelines.")
 else:
     # FILTERS ROW
     st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
     
     f1, f2 = st.columns(2)
     with f1:
-        locations = ["All Locations"] + list(data['store_location'].unique())
+        locations = ["All Locations"] + list(active_data['store_location'].unique())
         selected_location = st.selectbox("📍 Store Location", locations)
     with f2:
-        categories = ["All Categories"] + list(data['product_category'].unique())
+        categories = ["All Categories"] + list(active_data['product_category'].unique())
         selected_category = st.selectbox("🏷️ Product Verticals", categories)
 
     # Filter Application
-    filtered_data = data.copy()
+    filtered_data = active_data.copy()
     if selected_location != "All Locations":
         filtered_data = filtered_data[filtered_data['store_location'] == selected_location]
     if selected_category != "All Categories":
         filtered_data = filtered_data[filtered_data['product_category'] == selected_category]
 
-    # PROFESSIONAL KPI CARDS (HTML Injected for precision styling)
+    # PROFESSIONAL KPI CARDS
     total_sales = filtered_data['total_revenue'].sum()
     total_items = filtered_data['quantity'].sum()
     avg_order_val = filtered_data['total_revenue'].mean() if len(filtered_data) > 0 else 0
@@ -186,15 +153,13 @@ else:
     with kpi2:
         st.markdown(f"<div class='metric-container'><div class='metric-label'>Volume Sold</div><div class='metric-value'>{total_items:,} units</div></div>", unsafe_allow_html=True)
     with kpi3:
-        st.markdown(f"<div class='metric-container'><div class='metric-label'>Average ticket value</div><div class='metric-value'>${avg_order_val:,.2f}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-container'><div class='metric-label'>Avg ticket value</div><div class='metric-value'>${avg_order_val:,.2f}</div></div>", unsafe_allow_html=True)
     with kpi4:
-        st.markdown(f"<div class='metric-container'><div class='metric-label'>MVP Product</div><div class='metric-value' style='font-size:1.4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{top_performer}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-container'><div class='metric-label'>MVP Product</div><div class='metric-value' style='font-size:1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{top_performer}</div></div>", unsafe_allow_html=True)
 
-    # VISUALIZATIONS WITH PROFESSIONAL GRAPH THEMES
+    # VISUALIZATIONS 
     st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
     graph_col1, graph_col2 = st.columns(2)
-
-    # Color Palette for Charts
     corporate_colors = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe']
 
     with graph_col1:
