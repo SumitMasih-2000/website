@@ -103,16 +103,18 @@ def fetch_analytics_data():
 init_db()
 
 # ==============================================================================
-# 3. SIDEBAR NAVIGATION CONTROLS (ZONE 0)
+# 3. SIDEBAR NAVIGATION CONTROLS (Incorporating Your Logo Asset)
 # ==============================================================================
 with st.sidebar:
+    # Looks for 'logo.png' locally in your project root directory
     try:
-        st.image("logo.png", width=80)
+        st.image("logo.png", width=90)
     except Exception:
+        # Fallback if file isn't named right or missing
         st.image("https://img.icons8.com/external-flatart-icons-flat-flatarticons/128/external-analytics-marketing-flatart-icons-flat-flatarticons.png", width=70)
         
     st.markdown("## **Retail Intelligence**")
-    st.caption("v2.8.0 • Material Engine")
+    st.caption("v2.9.0 • Custom Branding")
     st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
     
     st.markdown("### Ingestion Hub")
@@ -149,7 +151,7 @@ st.title("Executive Performance Suite")
 st.markdown("Real-time telemetry, transaction flows, and spatial financial distributions.")
 st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-# FILTERS CONTAINER BLOCK (Using streamlined text references rather than emoji hacks)
+# FILTERS CONTAINER BLOCK
 with st.container():
     f1, f2 = st.columns(2)
     with f1:
@@ -170,7 +172,7 @@ if not filtered_data.empty:
 has_data = not filtered_data.empty
 
 # ==============================================================================
-# ZONE 1: EXECUTIVE LEVEL KPIs (HTML-Injected Vector Icons)
+# ZONE 1: EXECUTIVE LEVEL KPIs
 # ==============================================================================
 total_sales = filtered_data['total_revenue'].sum() if has_data else 0.0
 total_items = filtered_data['quantity'].sum() if has_data else 0
