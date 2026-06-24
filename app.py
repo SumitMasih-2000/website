@@ -74,17 +74,20 @@ def fetch_analytics_data():
 # Initialize DB structure
 init_db()
 
+
 # ==========================================
 # 3. SIDEBAR NAVIGATION & UPLOAD
 # ==========================================
 with st.sidebar:
+    # Try loading your custom local logo safely
     try:
         st.image("logo.png", width=80)
     except Exception:
+        # Fallback if logo.png is missing in the folder
         st.image("https://img.icons8.com/external-flatart-icons-flat-flatarticons/128/external-analytics-marketing-flatart-icons-flat-flatarticons.png", width=70)
         
     st.markdown("## **Retail Intelligence**")
-    st.caption("v2.3.0 • Enterprise Edition")
+    st.caption("v2.2.0 • Enterprise Edition")
     st.markdown("<div style='margin: 20px 0;'></div>", unsafe_allow_html=True)
     
     st.markdown("### 📥 Data Ingestion")
