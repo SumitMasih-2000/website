@@ -13,14 +13,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Professional CSS (Emerald Teal & Mint Palette)
 st.markdown("""
     <style>
         .main { background-color: #f4f7f6; font-family: 'Inter', sans-serif; }
         [data-testid="stSidebar"] { background-color: #064e3b !important; color: #ffffff; }
         [data-testid="stSidebar"] .stMarkdown h2, [data-testid="stSidebar"] p { color: #ecfdf5 !important; }
-        
-        /* Emerald Custom Metric Cards */
         .metric-container {
             background-color: #ffffff; padding: 20px; border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
@@ -75,7 +72,7 @@ def fetch_analytics_data():
 init_db()
 
 # ==========================================
-# 3. SIDEBAR NAVIGATION & UPLOAD
+# 3. SIDEBAR NAVIGATION & FLEXIBLE UPLOAD
 # ==========================================
 with st.sidebar:
     try:
@@ -84,42 +81,49 @@ with st.sidebar:
         st.image("https://img.icons8.com/external-flatart-icons-flat-flatarticons/128/external-analytics-marketing-flatart-icons-flat-flatarticons.png", width=70)
         
     st.markdown("## **Retail Intelligence**")
-    st.caption("v2.4.0 • Mint Enterprise")
+    st.caption("v2.5.0 • Omnichannel Engine")
     st.markdown("<div style='margin: 20px 0;'></div>", unsafe_allow_html=True)
     
     st.markdown("### 📥 Data Ingestion")
-    uploaded_file = st.file_uploader("Upload Daily Sales (CSV)", type=["csv"])
+    # CHANGED: Added "xlsx" to types array
+    uploaded_file = st.file_uploader("Upload Sales Data (CSV or Excel)", type=["csv", "xlsx"])
 
-# Define empty backup schema so interface has placeholder structures if empty
-empty_schema = pd.DataFrame(columns=['date', 'product_category', 'product_name', 'quantity', 'unit_price', 'total_revenue', 'store_location'])
-active_data = empty_schema.copy()
+active_data = pd.DataFrame(columns=['date', 'product_category', 'product_name', 'quantity', 'unit_price', 'total_revenue', 'store_location'])
 
-# Ingestion Logic
+# Flexible Ingestion Engine
 if uploaded_file is not None:
     try:
-        raw_df = pd.read_csv(uploaded_file)
+        # Check the file extension dynamically
+        if uploaded_file.name.endswith('.csv'):
+            raw_df = pd.read_csv(uploaded_file)
+        else:
+            raw_df = pd.read_excel(uploaded_file)
+            
+        # Standardize column headers to lowercase and strip whitespaces just in case Excel has typos
+        raw_df.columns = raw_df.columns.str.lower().str.strip().str.replace(' ', '_')
+        
         required_cols = {'date', 'product_category', 'product_name', 'quantity', 'unit_price', 'store_location'}
         
         if required_cols.issubset(raw_df.columns):
             active_data = save_to_db(raw_df)
-            st.sidebar.success("⚡ Database synchronized.")
+            st.sidebar.success(f"⚡ Successfully imported {uploaded_file.name}")
         else:
-            st.sidebar.error("Schema Mismatch. Please check file columns.")
+            st.sidebar.error("Schema Mismatch. Please ensure headers match the required structure.")
     except Exception as e:
-        st.sidebar.error(f"Error processing file: {e}")
+        st.sidebar.error(f"Error reading file: {e}")
 else:
     historical_data = fetch_analytics_data()
     if not historical_data.empty:
         active_data = historical_data
 
 # ==========================================
-# 4. ALWAYS VISIBLE MAIN INTERFACE
+# 4. DASHBOARD RENDERER
 # ==========================================
 st.title("📊 Executive Performance Dashboard")
 st.markdown("Real-time transactional insights, revenue trends, and localized store performance.")
 st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
 
-# FILTERS ROW (Defaults gracefully if dropdown features are missing)
+# FILTERS ROW
 f1, f2 = st.columns(2)
 with f1:
     locations = ["All Locations"] + list(active_data['store_location'].unique()) if not active_data.empty else ["All Locations"]
@@ -136,7 +140,7 @@ if not filtered_data.empty:
     if selected_category != "All Categories":
         filtered_data = filtered_data[filtered_data['product_category'] == selected_category]
 
-# KPI ENGINE (Evaluates to 0 if data is not uploaded)
+# KPI ENGINE
 has_data = not filtered_data.empty
 total_sales = filtered_data['total_revenue'].sum() if has_data else 0.0
 total_items = filtered_data['quantity'].sum() if has_data else 0
@@ -190,7 +194,7 @@ with graph_col2:
     fig_bar.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=350, xaxis_title="Category", yaxis_title="Revenue ($)")
     st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
-# SECURE TRANSACTION LEDGER
+# DATA LEDGER
 st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
 with st.expander("📋 Secure SQL Database Record Ledger"):
     st.dataframe(
