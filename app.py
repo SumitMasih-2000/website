@@ -32,9 +32,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. DATABASE PIPELINE
+# 2. DATABASE PIPELINE & COORDINATE ENGINE
 # ==========================================
 DB_NAME = "retail_data.db"
+
+# Internal coordinate registry for mapping cities to global coordinates accurately
+COORDINATE_REGISTRY = {
+    "New York": {"lat": 40.7128, "lon": -74.0060},
+    "Los Angeles": {"lat": 34.0522, "lon": -118.2437},
+    "Chicago": {"lat": 41.8781, "lon": -87.6298},
+    "London": {"lat": 51.5074, "lon": -0.1278},
+    "Tokyo": {"lat": 35.6762, "lon": 139.6503},
+    "Paris": {"lat": 48.8566, "lon": 2.3522}
+}
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -72,7 +82,7 @@ def fetch_analytics_data():
 init_db()
 
 # ==========================================
-# 3. SIDEBAR NAVIGATION & FLEXIBLE UPLOAD
+# 3. SIDEBAR NAVIGATION & UPLOAD
 # ==========================================
 with st.sidebar:
     try:
@@ -81,34 +91,29 @@ with st.sidebar:
         st.image("https://img.icons8.com/external-flatart-icons-flat-flatarticons/128/external-analytics-marketing-flatart-icons-flat-flatarticons.png", width=70)
         
     st.markdown("## **Retail Intelligence**")
-    st.caption("v2.5.0 • Omnichannel Engine")
+    st.caption("v2.6.0 • Global Edition")
     st.markdown("<div style='margin: 20px 0;'></div>", unsafe_allow_html=True)
     
     st.markdown("### 📥 Data Ingestion")
-    # CHANGED: Added "xlsx" to types array
     uploaded_file = st.file_uploader("Upload Sales Data (CSV or Excel)", type=["csv", "xlsx"])
 
 active_data = pd.DataFrame(columns=['date', 'product_category', 'product_name', 'quantity', 'unit_price', 'total_revenue', 'store_location'])
 
-# Flexible Ingestion Engine
 if uploaded_file is not None:
     try:
-        # Check the file extension dynamically
         if uploaded_file.name.endswith('.csv'):
             raw_df = pd.read_csv(uploaded_file)
         else:
             raw_df = pd.read_excel(uploaded_file)
             
-        # Standardize column headers to lowercase and strip whitespaces just in case Excel has typos
         raw_df.columns = raw_df.columns.str.lower().str.strip().str.replace(' ', '_')
-        
         required_cols = {'date', 'product_category', 'product_name', 'quantity', 'unit_price', 'store_location'}
         
         if required_cols.issubset(raw_df.columns):
             active_data = save_to_db(raw_df)
             st.sidebar.success(f"⚡ Successfully imported {uploaded_file.name}")
         else:
-            st.sidebar.error("Schema Mismatch. Please ensure headers match the required structure.")
+            st.sidebar.error("Schema Mismatch. Please check file columns.")
     except Exception as e:
         st.sidebar.error(f"Error reading file: {e}")
 else:
@@ -157,44 +162,70 @@ with kpi3:
 with kpi4:
     st.markdown(f"<div class='metric-container'><div class='metric-label'>MVP Product</div><div class='metric-value' style='font-size:1.3rem;'>{top_performer}</div></div>", unsafe_allow_html=True)
 
-# VISUALIZATIONS
+# ==========================================
+# 5. NEW: GLOBAL SALES GEOLOCATION MAP
+# ==========================================
+st.markdown("### 🌍 Global Revenue Footprint Map")
+
+if has_data:
+    # Aggregate revenue by location
+    map_df = filtered_data.groupby('store_location')['total_revenue'].sum().reset_index()
+    
+    # Inject latitude and longitude safely using mapping registry
+    map_df['lat'] = map_df['store_location'].map(lambda x: COORDINATE_REGISTRY.get(x, {}).get('lat', 0))
+    map_df['lon'] = map_df['store_location'].map(lambda x: COORDINATE_REGISTRY.get(x, {}).get('lon', 0))
+    
+    # Filter out entries that could not map to positions
+    map_df = map_df[(map_df['lat'] != 0) & (map_df['lon'] != 0)]
+    
+    fig_map = px.scatter_geo(
+        map_df,
+        lat='lat',
+        lon='lon',
+        size='total_revenue',
+        hover_name='store_location',
+        hover_data={'total_revenue': ':$,.2f', 'lat': False, 'lon': False},
+        size_max=40,
+        projection="natural earth",
+        template="plotly_white"
+    )
+    # Style the map elements to match Emerald Theme
+    fig_map.update_traces(marker=dict(color='#10b981', opacity=0.75, line=dict(width=1.5, color='#064e3b')))
+    fig_map.update_geos(
+        showland=True, landcolor="#f1f5f9",
+        showocean=True, oceancolor="#e0f2fe",
+        showcountries=True, countrycolor="#cbd5e1"
+    )
+    fig_map.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=450)
+else:
+    # Placeholder layout if map is empty
+    fig_map = px.scatter_geo(projection="natural earth", template="plotly_white")
+    fig_map.update_geos(showland=True, landcolor="#f1f5f9", showocean=True, oceancolor="#e0f2fe")
+    fig_map.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=405)
+
+st.plotly_chart(fig_map, use_container_width=True, config={'displayModeBar': False})
+
+# LINE AND BAR CHARTS ROW
 st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
 graph_col1, graph_col2 = st.columns(2)
 mint_palette = ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5']
 
 with graph_col1:
     st.markdown("### 📅 Net Revenue Run Rate")
-    if has_data:
-        trend_df = filtered_data.groupby('date')['total_revenue'].sum().reset_index().sort_values('date')
-    else:
-        trend_df = pd.DataFrame(columns=['date', 'total_revenue'])
-        
-    fig_trend = px.line(
-        trend_df, x='date', y='total_revenue', markers=True,
-        labels={'total_revenue': 'Revenue ($)', 'date': 'Timeline'},
-        template="plotly_white"
-    )
+    trend_df = filtered_data.groupby('date')['total_revenue'].sum().reset_index().sort_values('date') if has_data else pd.DataFrame(columns=['date', 'total_revenue'])
+    fig_trend = px.line(trend_df, x='date', y='total_revenue', markers=True, labels={'total_revenue': 'Revenue ($)', 'date': 'Timeline'}, template="plotly_white")
     fig_trend.update_traces(line_color='#10b981', line_width=3, marker=dict(size=8, color='#064e3b'))
-    fig_trend.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=350, xaxis_title="Timeline", yaxis_title="Revenue ($)")
+    fig_trend.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=320)
     st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
 
 with graph_col2:
     st.markdown("### 📊 Distribution by Product Vertical")
-    if has_data:
-        cat_df = filtered_data.groupby('product_category')['total_revenue'].sum().reset_index()
-    else:
-        cat_df = pd.DataFrame(columns=['product_category', 'total_revenue'])
-        
-    fig_bar = px.bar(
-        cat_df, x='product_category', y='total_revenue',
-        labels={'total_revenue': 'Revenue ($)', 'product_category': 'Category'},
-        template="plotly_white",
-        color_discrete_sequence=mint_palette
-    )
-    fig_bar.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=350, xaxis_title="Category", yaxis_title="Revenue ($)")
+    cat_df = filtered_data.groupby('product_category')['total_revenue'].sum().reset_index() if has_data else pd.DataFrame(columns=['product_category', 'total_revenue'])
+    fig_bar = px.bar(cat_df, x='product_category', y='total_revenue', labels={'total_revenue': 'Revenue ($)', 'product_category': 'Category'}, template="plotly_white", color_discrete_sequence=mint_palette)
+    fig_bar.update_layout(margin=dict(l=20, r=20, t=20, b=20), height=320)
     st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
-# DATA LEDGER
+# SECURE TRANSACTION LEDGER
 st.markdown("<div class='custom-hr'></div>", unsafe_allow_html=True)
 with st.expander("📋 Secure SQL Database Record Ledger"):
     st.dataframe(
